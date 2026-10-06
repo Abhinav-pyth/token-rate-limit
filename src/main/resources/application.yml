@@ -1,0 +1,16 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: rate-limit-token-bucket
+
+# Token-bucket rate limiting settings (bound to RateLimitProperties)
+rate-limit:
+  enabled: true
+  capacity: 5                  # max burst: bucket holds up to 5 tokens
+  refill-tokens-per-second: 1  # sustained rate: 1 token is added every second
+
+logging:
+  level:
+    com.example.ratelimit: INFO
