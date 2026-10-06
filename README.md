@@ -111,28 +111,43 @@ mvn test
 
 ---
 
-## Deploying to Vercel
+## Deploying to Vercel — read this first
 
-Vercel supports Java via community builders (`@vercel/java`). A `vercel.json` is included in this repo.
+**Vercel does not support Spring Boot / long-running Java servers.** There is no official
+`@vercel/java` builder (the package is not published on npm), and Vercel's runtime model is
+static sites + short-lived Serverless/Edge functions. A Spring Boot app needs a persistent JVM,
+so a direct deploy will fail or misbehave. Additionally, this demo's token buckets are
+**in-memory**, which cannot work correctly across stateless, auto-scaled serverless invocations.
 
-### Steps
-1. Push this project to GitHub/GitLab/Bitbucket.
-2. Import the repo at https://vercel.com/new (or run `npx vercel` from this folder).
-3. The included `vercel.json` tells Vercel to build with `@vercel/java` using `pom.xml`.
-4. After deployment, test: `curl -i https://<your-app>.vercel.app/api/hello`
+### Option A (recommended): deploy the jar/container elsewhere
+A `Dockerfile` is included in this repo. It works as-is on **Railway, Fly.io, Render,
+Koyeb, AWS App Runner/ECS, Google Cloud Run**, or any Docker host — all of which run a
+long-lived container so the token bucket behaves correctly:
 
-### Important caveats for THIS app on Vercel
-- **Serverless = cold starts.** Spring Boot can take 5–10s to boot on the first request after idle.
-- **In-memory token buckets do NOT persist** across invocations and are not shared between instances.
-  Rate limiting will behave inconsistently on serverless. For production-grade limiting, back the
-  bucket with a fast global store such as **Upstash Redis** (see alternative below).
-
-### Alternative (recommended): deploy on a persistent host
-Any of these runs the same jar with a long-lived JVM, so the token bucket works correctly:
 ```bash
-# Render / Railway / Fly.io / any Docker host — Dockerfile:
-FROM eclipse-temurin:17-jre
-COPY target/rate-limit-token-bucket-0.0.1-SNAPSHOT.jar app.jar
-ENTRYPOINT ["java","-jar","/app.jar"]
+mvn package && docker build -t rate-limit-demo . && docker run -p 8080:8080 rate-limit-demo
 ```
-Build first with `mvn package`, then point the host at the Dockerfile or use their native Spring Boot support.
+- Railway / Render: connect the GitHub repo, pick "Docker" as the build provider.
+- Fly.io: `fly launch` (it detects the Dockerfile) → `fly deploy`.
+- Cloud Run / App Runner: point them at the image built from this Dockerfile.
+- The app honors the injected `PORT` env var (`server.port: ${PORT:8080}`), so no config changes needed.
+
+### Option B: keep the frontend on Vercel, backend elsewhere ("hybrid")
+If you specifically want a Vercel URL, deploy a static/React frontend to Vercel and proxy API
+calls to the Spring Boot container hosted per Option A. In `vercel.json`, rewrites can forward
+`/api/*` to your backend's public URL:
+
+```json
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://rate-limit-demo.onrender.com/api/$1" }
+  ]
+}
+```
+
+### Option C: force it onto Vercel Serverless (not recommended for this demo)
+The only way to run Java on Vercel today is via custom-runtime Serverless Functions, which means
+restructuring the app into request-scoped functions, losing the embedded-server model, and moving
+rate-limit state to an external store such as **Upstash Redis** (buckets in memory would reset on
+every cold start). If you go this route, consider rewriting the limiter with Bucket4j + a Redis
+backend, or simply use Vercel's own Edge Config/KV-based middleware for limiting instead.
