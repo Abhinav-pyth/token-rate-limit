@@ -108,3 +108,31 @@ mvn test
 - For production APIs consider the `RateLimit` standard headers (`RateLimit-Limit`, etc.).
 - Key strategy can be switched from IP to API key / user ID inside
   `RateLimitInterceptor#resolveClientKey`.
+
+---
+
+## Deploying to Vercel
+
+Vercel supports Java via community builders (`@vercel/java`). A `vercel.json` is included in this repo.
+
+### Steps
+1. Push this project to GitHub/GitLab/Bitbucket.
+2. Import the repo at https://vercel.com/new (or run `npx vercel` from this folder).
+3. The included `vercel.json` tells Vercel to build with `@vercel/java` using `pom.xml`.
+4. After deployment, test: `curl -i https://<your-app>.vercel.app/api/hello`
+
+### Important caveats for THIS app on Vercel
+- **Serverless = cold starts.** Spring Boot can take 5–10s to boot on the first request after idle.
+- **In-memory token buckets do NOT persist** across invocations and are not shared between instances.
+  Rate limiting will behave inconsistently on serverless. For production-grade limiting, back the
+  bucket with a fast global store such as **Upstash Redis** (see alternative below).
+
+### Alternative (recommended): deploy on a persistent host
+Any of these runs the same jar with a long-lived JVM, so the token bucket works correctly:
+```bash
+# Render / Railway / Fly.io / any Docker host — Dockerfile:
+FROM eclipse-temurin:17-jre
+COPY target/rate-limit-token-bucket-0.0.1-SNAPSHOT.jar app.jar
+ENTRYPOINT ["java","-jar","/app.jar"]
+```
+Build first with `mvn package`, then point the host at the Dockerfile or use their native Spring Boot support.

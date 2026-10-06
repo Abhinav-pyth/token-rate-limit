@@ -39,6 +39,10 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- Needed so Vercel's Java builder can find the entry point -->
+                    <mainClass>com.example.ratelimit.RateLimitApplication</mainClass>
+                </configuration>
             </plugin>
         </plugins>
     </build>
